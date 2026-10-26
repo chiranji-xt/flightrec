@@ -44,3 +44,12 @@ def test_view_command_writes_a_page(tmp_path, capsys):
     assert out.exists()
     assert _embedded(out.read_text(encoding="utf-8"))["events"][0]["name"] == "echo"
     assert "run.html" in capsys.readouterr().out
+
+
+def test_version_flag(capsys):
+    import pytest
+
+    with pytest.raises(SystemExit) as stop:
+        main(["--version"])
+    assert stop.value.code == 0
+    assert capsys.readouterr().out.strip() == f"flightrec {flightrec.__version__}"

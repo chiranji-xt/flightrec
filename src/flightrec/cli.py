@@ -7,6 +7,7 @@ import webbrowser
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from . import __version__
 from .store import read_events
 from .viewer import write_viewer
 
@@ -70,6 +71,7 @@ def diff(path_a: str, path_b: str, out=None) -> int:
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="flightrec", description="Inspect agent recordings.")
+    parser.add_argument("--version", action="version", version=f"flightrec {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     p_show = sub.add_parser("show", help="print a timeline of a recording")
     p_show.add_argument("recording")

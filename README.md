@@ -4,6 +4,27 @@ A flight recorder for AI agents. Record every model call, tool call, clock read 
 
 Agent bugs are hard to chase because the run that failed will not happen again: the model answers differently, the search returns new results. flightrec turns one bad run into a file you can replay as many times as you like.
 
+- **Record** a run to a plain JSON Lines file.
+- **Replay** it offline: no network, no cost, same behaviour. If your code changes what it does, replay fails loudly instead of quietly drifting.
+- **Branch** from any step: change what that step returned, and continue the run live from there.
+- **See it** in a browser viewer you can scrub, and **diff** two runs to find the first step where they split.
+
+Works with the Anthropic SDK (sync, async and streaming) and any client whose calls you list in `wrap(methods=...)`. No dependencies. Status: alpha (v0.1).
+
+## Try it in two minutes
+
+No API key needed: the demo uses a scripted fake model.
+
+```
+pip install .
+python examples/demo_agent.py record-bad       # the agent answers "flightrec re" (a truncated result)
+flightrec view runs/demo-bad.jsonl             # scrub to step 1 in your browser
+python examples/demo_agent.py branch           # fix step 1 and continue: the answer is now correct
+flightrec diff runs/demo-bad.jsonl runs/demo-fixed.jsonl
+```
+
+Install from a clone for now (`pip install .`); it is not on PyPI yet.
+
 ## Use
 
 ```python
