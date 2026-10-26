@@ -27,6 +27,10 @@ def show(path: str, out=None) -> None:
             f"{ev['duration'] * 1000:7.1f}ms  {_short(ev['request'])}",
             file=out,
         )
+        if ev.get("stream"):
+            tail = " (stopped early)" if ev.get("incomplete") else ""
+            print(f"       -> stream of {len(ev['response'])} chunks{tail}" + (f"; {_short(ev['error'])}" if ev["error"] else ""), file=out)
+            continue
         outcome = ev["error"] or ev["response"]
         print(f"       -> {_short(outcome)}", file=out)
 

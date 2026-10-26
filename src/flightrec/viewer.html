@@ -229,6 +229,15 @@ function renderMessage(m, idx, isNew) {
     el("div", { class: "role" }, el("span", null, m.role || "message"), el("span", null, "#" + idx), isNew ? el("span", { class: "tag" }, "new") : null),
     ...blockNodes(m.content));
 }
+// Text from the raw delta events (the helper stream's extra "text" events repeat them, so skip those).
+function assembleText(chunks) {
+  return chunks.map((c) => (c && c.type === "content_block_delta" && c.delta && typeof c.delta.text === "string" ? c.delta.text : "")).join("");
+}
+function chunkLabel(c) {
+  if (c == null || typeof c !== "object") return String(c);
+  const text = c.delta && c.delta.text != null ? c.delta.text : c.text;
+  return (c.type || "chunk") + (typeof text === "string" ? "  " + json(text) : "");
+}
 function previousLlm(i) {
   for (let j = i - 1; j >= 0; j--) if (state.events[j].kind === "llm") return state.events[j];
   return null;
@@ -244,6 +253,9 @@ function renderDetail(e, i) {
       el("span", { class: "chip" }, ms(e.duration)),
       el("span", { class: "chip" }, "t+" + (e.started - t0).toFixed(3) + " s"),
       e.error ? el("span", { class: "chip err" }, "error") : null,
+      e.stream ? el("span", { class: "chip" }, "stream") : null,
+      e.incomplete ? el("span", { class: "chip err" }, "incomplete") : null,
+      e.async ? el("span", { class: "chip" }, "async") : null,
       e.edited ? el("span", { class: "chip edit" }, "edited (branch point)") : null));
   if (e.edited && e.original) d.append(el("details", null, el("summary", null, "Original result before the edit"),
     el("pre", { class: "raw" }, json(e.original.error || e.original.response, true))));
@@ -256,7 +268,14 @@ function renderDetail(e, i) {
     d.append(el("h3", null, "Context sent to the model (" + req.messages.length + " messages, " + json(req).length.toLocaleString() + " chars)"));
     if (req.system) d.append(el("div", { class: "msg" }, el("div", { class: "role" }, "system"), ...blockNodes(req.system)));
     req.messages.forEach((m, k) => d.append(renderMessage(m, k, k >= seen)));
-    if (e.response && e.response.content) {
+    if (e.stream) {
+      const chunks = Array.isArray(e.response) ? e.response : [];
+      const final = e.final && e.final.content ? e.final : null;
+      d.append(el("h3", null, "Streamed response (" + chunks.length + " chunks" + (e.incomplete ? ", stopped early" : "") + ")"));
+      d.append(el("div", { class: "msg" }, ...(final ? blockNodes(final.content) : [el("pre", { class: "blk" }, assembleText(chunks) || "(no text in the chunks)")])));
+      d.append(el("details", null, el("summary", null, "Chunks in order"),
+        el("pre", { class: "raw" }, chunks.map((c, k) => k + "  " + chunkLabel(c)).join("\n"))));
+    } else if (e.response && e.response.content) {
       d.append(el("h3", null, "Model response" + (e.response.stop_reason ? " · " + e.response.stop_reason : "")));
       d.append(el("div", { class: "msg" }, ...blockNodes(e.response.content)));
     }
@@ -277,6 +296,8 @@ function branchPanel(e, i) {
     el("option", { value: "live" }, "Run this step live, unchanged"));
   const editor = el("textarea", { rows: "8", spellcheck: "false", "aria-label": "Edited result as JSON" });
   editor.value = e.error ? "null" : json(e.response, true);
+  const streamNote = e.stream ? el("p", { class: "hint", style: "margin:0 0 8px" },
+    "This step is a stream. Editing replaces its whole list of chunks, so \"Raise an error\" or \"Run this step live\" are usually what you want.") : null;
   const errType = el("input", { value: "RuntimeError", "aria-label": "Exception class" });
   const errMsg = el("input", { value: "simulated failure", "aria-label": "Exception message" });
   const errRow = el("div", { class: "fields" }, errType, errMsg);
@@ -319,7 +340,7 @@ function branchPanel(e, i) {
   return el("section", { class: "branch" },
     el("h3", null, "Branch from here"),
     el("p", { class: "hint", style: "margin:0 0 8px" }, "What if step " + i + " had gone differently? Edit it, then run the snippet to continue from here with a real agent."),
-    mode, editor, errRow, status, snippet, copy);
+    streamNote, mode, editor, errRow, status, snippet, copy);
 }
 
 document.addEventListener("keydown", (ev) => {

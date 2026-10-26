@@ -44,4 +44,6 @@ def read_events(path: Path) -> List[Dict[str, Any]]:
                     raise ValueError(f"unsupported recording version {record.get('version')}")
                 continue
             events.append(record)
+    # A streamed call is written when its stream ends, which can be after calls made during it.
+    events.sort(key=lambda event: event["seq"])
     return events

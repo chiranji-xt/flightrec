@@ -25,6 +25,28 @@ with flightrec.Recorder("runs/bad.jsonl", mode="replay") as rec:
 
 Commit a recording of a failure and replay it in CI as a regression test: it costs nothing and cannot flake.
 
+### Async and streaming
+
+Nothing changes in how you use it. Async clients, `async def` tools and streams are recorded as you use them and come back the same way on replay.
+
+```python
+@flightrec.tool
+async def search(query: str) -> str: ...
+
+async with flightrec.Recorder("runs/a.jsonl") as rec:              # `with` works too
+    llm = rec.wrap(anthropic.AsyncAnthropic())
+    async with llm.messages.stream(**request) as stream:           # the messages.stream() helper
+        async for text in stream.text_stream:
+            ...
+        final = await stream.get_final_message()
+    events = await llm.messages.create(stream=True, **request)     # raw events
+    async for event in events: ...
+```
+
+A streamed call is one step in the recording, holding its chunks. They are captured at the source, so it is recorded the same whether you iterate events, read `text_stream`, or only ask for the final message. In replay, chunks and the final message come back as the SDK's own types, with no network. In the viewer a stream shows its assembled text, its chunk list, and a note if it stopped early or failed part-way.
+
+Use `stream_methods=` on `wrap()` for other SDKs' stream helpers (default: `("messages.stream",)`). Branching works across streams: earlier streams replay, and a stream step can be re-run live or made to fail. Editing one replaces its whole list of chunks.
+
 ### Works with the real Anthropic SDK
 
 Replayed responses are rebuilt as the SDK's own types, so `isinstance(resp, anthropic.types.Message)`, `block.input` being a `dict`, and `**block.input` all behave as in the live run. This relies on the SDK being imported in your program (it is, if you use it); a recording can never cause an import. If the class is not available, you get an attribute-access stand-in instead.
@@ -87,11 +109,14 @@ Try it without an API key: `python examples/demo_agent.py record`, then `replay`
 
 JSON Lines. A header line, then one object per call: `seq`, `kind` (`llm`, `tool`, `nondeterminism`), `name`, `request`, `request_hash`, `response`, `error`, `started`, `duration`. Each event is flushed as it happens, so a crashed run still leaves a usable recording.
 
+Extra fields appear when they apply: `async` (the call was awaited), `stream` (`"events"` or `"manager"`, with `response` as the list of chunks), `final` (a stream helper's final message), `incomplete`, `edited` and `original` (a branch point), `response_type` (the SDK class to rebuild on replay). Because a stream's event is written when it ends, lines can be out of order in the file; readers sort by `seq`.
+
 ## Limits (v0.1)
 
-- Streaming responses are not recorded yet.
-- Calls are matched by order, so concurrent calls (threads, `asyncio.gather`) replay in recorded order only if they are made in the same order.
-- Async clients are not wrapped yet.
+- Calls are matched by the order they start in. `asyncio.gather` works, because tasks start in a fixed order; threads do not (the call counter is not thread-safe).
+- A stream is written to the file when it ends. If the process dies mid-stream, that stream's event is lost; an abandoned or closed stream is written as `"incomplete": true`.
+- Replayed `messages.stream()` helpers support iteration, `text_stream`, `until_done()`, `get_final_message()`, `get_final_text()` and `current_message_snapshot`. Attributes that come from the live HTTP response (`.response`, `.request_id`) do not exist on replay.
+- A call that is cancelled (`asyncio.CancelledError`) is not recorded.
 - A tool that raises during recording raises `ReplayedError` on replay, not the original exception class (the message and type name are kept). The same goes for SDK errors such as `BadRequestError`.
 - Tool results are stored as JSON: a tool that returns a custom object comes back as a plain dict on replay.
 
@@ -99,7 +124,7 @@ JSON Lines. A header line, then one object per call: `seq`, `kind` (`llm`, `tool
 
 - [x] Time-travel viewer in the browser: scrub steps, inspect the context at each one
 - [x] Branching: edit a result at step N and re-run from there
-- [ ] Streaming and async support
+- [x] Streaming and async support
 - [ ] `flightrec replay module:function` from the CLI
 
 ## Develop
