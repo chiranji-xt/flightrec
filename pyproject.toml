@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flightrec"
+version = "0.1.0"
+description = "Flight recorder for AI agents: record every model and tool call, replay runs offline, diff runs."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+flightrec = "flightrec.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flightrec"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
