@@ -1,21 +1,44 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "flightrec"
-version = "0.1.0"
-description = "Flight recorder for AI agents: record every model and tool call, replay runs offline, diff runs."
+# The PyPI name "flightrec" belongs to a different project, so the distribution is named
+# agent-flightrec. The import name and the command are still `flightrec`.
+name = "agent-flightrec"
+dynamic = ["version"]
+description = "Flight recorder for AI agents: record every model and tool call, replay runs offline, branch from any step, diff runs."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "chiranji-xt" }]
+keywords = ["ai-agents", "llm", "debugging", "record-replay", "testing", "anthropic", "observability"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: Software Development :: Testing",
+]
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "anthropic"]
+# The Anthropic SDK needs Python 3.10+; on 3.9 its tests are skipped.
+dev = ["pytest>=8", "anthropic; python_version >= '3.10'"]
 
 [project.scripts]
 flightrec = "flightrec.cli:main"
+
+[tool.hatch.version]
+path = "src/flightrec/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/flightrec"]

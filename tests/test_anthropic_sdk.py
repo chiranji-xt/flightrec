@@ -174,8 +174,8 @@ def test_sdk_errors_are_recorded_and_replayed(tmp_path, client):
             rec.wrap(None).messages.create(**request)
 
 
-def test_other_client_attributes_pass_through(client):
-    with flightrec.Recorder("unused.jsonl", mode="record") as rec:
+def test_other_client_attributes_pass_through(client, tmp_path):
+    with flightrec.Recorder(tmp_path / "unused.jsonl", mode="record") as rec:
         wrapped = rec.wrap(client)
         assert wrapped.base_url == client.base_url
         assert wrapped.with_options(timeout=5) is not None

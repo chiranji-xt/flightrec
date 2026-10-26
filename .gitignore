@@ -4,3 +4,6 @@ __pycache__/
 dist/
 .venv/
 runs/
+
+# recordings made while experimenting; keep real ones under runs/ or commit them deliberately
+/*.jsonl

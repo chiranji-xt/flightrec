@@ -4,6 +4,8 @@
     python examples/demo_agent.py replay      # re-run offline from the recording
     python examples/demo_agent.py record-bad  # same task, but the search tool truncates its result
     flightrec diff runs/demo.jsonl runs/demo-bad.jsonl
+    python examples/demo_agent.py branch      # fix step 1 of the bad run and continue: runs/demo-fixed.jsonl
+    flightrec view runs/demo-bad.jsonl        # scrub the timeline in the browser
 """
 
 import sys
@@ -59,6 +61,11 @@ def main() -> None:
     if mode == "replay":
         with flightrec.Recorder("runs/demo.jsonl", mode="replay") as rec:
             print(run_agent(rec.wrap(None), task))
+    elif mode == "branch":
+        # What if the search had returned the whole page? Replays step 0, edits step 1, runs the rest live.
+        full = DOCS["flightrec"]
+        with flightrec.Recorder("runs/demo-bad.jsonl", mode="branch", at=1, response=full, out="runs/demo-fixed.jsonl") as rec:
+            print(run_agent(rec.wrap(FakeClient()), task))
     elif mode == "record-bad":
         with flightrec.Recorder("runs/demo-bad.jsonl") as rec:
             print(run_agent(rec.wrap(FakeClient()), task, search_tool=flightrec.tool(search_truncated, name="search")))
