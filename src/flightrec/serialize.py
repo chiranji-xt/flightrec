@@ -3,7 +3,8 @@
 import dataclasses
 import hashlib
 import json
-from typing import Any
+import sys
+from typing import Any, Optional
 
 
 def to_jsonable(obj: Any) -> Any:
@@ -23,6 +24,33 @@ def to_jsonable(obj: Any) -> Any:
     if hasattr(obj, "__dict__"):
         return to_jsonable(vars(obj))
     return repr(obj)
+
+
+def type_path(obj: Any) -> Optional[str]:
+    """`module:Qualname` for pydantic-style SDK objects, so replay can rebuild the real type."""
+    cls = type(obj)
+    if hasattr(cls, "model_validate") and hasattr(obj, "model_dump"):
+        return f"{cls.__module__}:{cls.__qualname__}"
+    return None
+
+
+def rehydrate(path: str, data: Any) -> Any:
+    """Rebuild an SDK object from its recorded dump, or return None if that is not possible.
+
+    Only classes in modules the program has already imported are used. A recording is just a
+    file, and reading one must never import code.
+    """
+    module_name, _, qualname = path.partition(":")
+    target: Any = sys.modules.get(module_name)
+    for part in qualname.split(".") if target is not None else ():
+        target = getattr(target, part, None)
+    validate = getattr(target, "model_validate", None)
+    if validate is None:
+        return None
+    try:
+        return validate(data)
+    except Exception:
+        return None
 
 
 def digest(obj: Any) -> str:

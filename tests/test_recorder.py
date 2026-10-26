@@ -128,3 +128,22 @@ def test_show_prints_timeline(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "3 call(s)" in out
     assert "tool" in out and "llm.messages.create" in out
+
+
+def test_replay_never_imports_modules_named_by_a_recording(tmp_path):
+    """A recording is just a file: its `response_type` may only use classes already imported."""
+    import json
+
+    path = tmp_path / "run.jsonl"
+    with flightrec.Recorder(path) as rec:
+        rec.wrap(SimpleNamespace(messages=SimpleNamespace(create=lambda **_: SimpleNamespace(text="hi")))).messages.create(m=1)
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    event = json.loads(lines[1])
+    event["response_type"] = "antigravity:Thing"  # importing this module would open a web browser
+    path.write_text("\n".join([lines[0], json.dumps(event)]) + "\n", encoding="utf-8")
+
+    with flightrec.Recorder(path, mode="replay") as rec:
+        response = rec.wrap(None).messages.create(m=1)
+    assert response.text == "hi"
+    assert "antigravity" not in sys.modules

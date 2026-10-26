@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
-from .serialize import Box, digest, to_jsonable
+from .serialize import Box, digest, rehydrate, to_jsonable, type_path
 from .store import Writer, read_events
 
 _UNSET: Any = object()
@@ -154,6 +154,9 @@ class Recorder:
             self._writer.write(event)
             raise
         event.update(response=to_jsonable(result), error=None)
+        kind_of_object = type_path(result)
+        if kind_of_object:
+            event["response_type"] = kind_of_object
         event["duration"] = time.time() - started
         self._writer.write(event)
         return result
@@ -178,6 +181,10 @@ class Recorder:
         if event["error"]:
             raise ReplayedError(event["error"]["type"], event["error"]["message"])
         response = event["response"]
+        if box and event.get("response_type"):
+            rebuilt = rehydrate(event["response_type"], response)
+            if rebuilt is not None:
+                return rebuilt
         return Box(response) if box and isinstance(response, (dict, list)) else response
 
 

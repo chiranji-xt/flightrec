@@ -25,6 +25,12 @@ with flightrec.Recorder("runs/bad.jsonl", mode="replay") as rec:
 
 Commit a recording of a failure and replay it in CI as a regression test: it costs nothing and cannot flake.
 
+### Works with the real Anthropic SDK
+
+Replayed responses are rebuilt as the SDK's own types, so `isinstance(resp, anthropic.types.Message)`, `block.input` being a `dict`, and `**block.input` all behave as in the live run. This relies on the SDK being imported in your program (it is, if you use it); a recording can never cause an import. If the class is not available, you get an attribute-access stand-in instead.
+
+The test suite runs record, replay and branch against the real SDK client with only the network faked (`tests/test_anthropic_sdk.py`, no API key needed). One extra test makes a real, tiny API request; it runs only with `FLIGHTREC_LIVE=1` and `ANTHROPIC_API_KEY` set.
+
 ### Branch: what if step N had gone differently?
 
 Pick a step in a recording, change what it returned, and continue from there with a real agent. Steps before it replay from the file, the edited step answers with your value, and every later step runs live, so the agent reacts to the change for real.
@@ -86,6 +92,8 @@ JSON Lines. A header line, then one object per call: `seq`, `kind` (`llm`, `tool
 - Streaming responses are not recorded yet.
 - Calls are matched by order, so concurrent calls (threads, `asyncio.gather`) replay in recorded order only if they are made in the same order.
 - Async clients are not wrapped yet.
+- A tool that raises during recording raises `ReplayedError` on replay, not the original exception class (the message and type name are kept). The same goes for SDK errors such as `BadRequestError`.
+- Tool results are stored as JSON: a tool that returns a custom object comes back as a plain dict on replay.
 
 ## Roadmap
 
@@ -97,6 +105,7 @@ JSON Lines. A header line, then one object per call: `seq`, `kind` (`llm`, `tool
 ## Develop
 
 ```
-pip install -e ".[dev]"
-pytest
+python -m venv .venv
+.venv/Scripts/pip install -e ".[dev]"     # Windows; use .venv/bin/pip elsewhere
+.venv/Scripts/python -m pytest
 ```
