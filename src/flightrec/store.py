@@ -9,11 +9,11 @@ FORMAT_VERSION = 1
 
 
 class Writer:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, **header: Any):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._fh = open(self.path, "w", encoding="utf-8")
-        self.write({"type": "header", "version": FORMAT_VERSION, "created": time.time()})
+        self.write({"type": "header", "version": FORMAT_VERSION, "created": time.time(), **header})
 
     def write(self, record: Dict[str, Any]) -> None:
         self._fh.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -21,6 +21,13 @@ class Writer:
 
     def close(self) -> None:
         self._fh.close()
+
+
+def read_header(path: Path) -> Dict[str, Any]:
+    """The first line of a recording (empty dict if the file is empty)."""
+    with open(path, "r", encoding="utf-8") as fh:
+        first = fh.readline().strip()
+    return json.loads(first) if first else {}
 
 
 def read_events(path: Path) -> List[Dict[str, Any]]:

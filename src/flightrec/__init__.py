@@ -7,7 +7,7 @@ from .recorder import (
     random,
     tool,
 )
-from .store import read_events
+from .store import read_events, read_header
 
 __all__ = [
     "Recorder",
@@ -17,6 +17,7 @@ __all__ = [
     "now",
     "random",
     "read_events",
+    "read_header",
     "tool",
 ]
 __version__ = "0.1.0"

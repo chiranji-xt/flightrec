@@ -11,6 +11,8 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 from .serialize import Box, digest, to_jsonable
 from .store import Writer, read_events
 
+_UNSET: Any = object()
+
 _current: "contextvars.ContextVar[Optional[Recorder]]" = contextvars.ContextVar(
     "flightrec_current", default=None
 )
@@ -35,14 +37,41 @@ class Recorder:
     mode="record": calls run for real and each result is appended to `path`.
     mode="replay": nothing runs; results come from `path` in order, and any call that
     differs from the recording raises ReplayDivergence.
+    mode="branch": "what if step `at` had returned something else?" Steps before `at` replay
+    from `path`; step `at` returns `response` (or raises `error`); every later step runs live.
+    With neither given, step `at` itself runs live. The new run is written to `out`, so it can
+    be replayed, viewed and diffed like any other recording. Use a real client and real tools.
     """
 
-    def __init__(self, path: Union[str, Path], mode: str = "record", strict: bool = True):
-        if mode not in ("record", "replay"):
-            raise ValueError("mode must be 'record' or 'replay'")
+    def __init__(
+        self,
+        path: Union[str, Path],
+        mode: str = "record",
+        strict: bool = True,
+        *,
+        at: Optional[int] = None,
+        response: Any = _UNSET,
+        error: Optional[BaseException] = None,
+        out: Union[str, Path, None] = None,
+    ):
+        if mode not in ("record", "replay", "branch"):
+            raise ValueError("mode must be 'record', 'replay' or 'branch'")
+        if mode == "branch":
+            if at is None or out is None:
+                raise ValueError("branch mode needs `at` (step number) and `out` (where to write the new run)")
+            if response is not _UNSET and error is not None:
+                raise ValueError("give `response` or `error`, not both")
+            if Path(out).resolve() == Path(path).resolve():
+                raise ValueError("`out` must differ from the recording being branched")
+        elif at is not None or response is not _UNSET or error is not None or out is not None:
+            raise ValueError("`at`, `response`, `error` and `out` are only for mode='branch'")
         self.path = Path(path)
         self.mode = mode
         self.strict = strict
+        self.at = at
+        self._override = response
+        self._override_error = error
+        self.out = Path(out) if out is not None else None
         self._writer: Optional[Writer] = None
         self._events: List[Dict[str, Any]] = []
         self._cursor = 0
@@ -58,6 +87,10 @@ class Recorder:
         else:
             self._events = read_events(self.path)
             self._cursor = 0
+            if self.mode == "branch":
+                if not 0 <= self.at < len(self._events):
+                    raise ValueError(f"step {self.at} is outside the recording (it has {len(self._events)} steps)")
+                self._writer = Writer(self.out, branch={"source": str(self.path), "at": self.at})
         self._token = _current.set(self)
         return self
 
@@ -78,7 +111,28 @@ class Recorder:
         request = to_jsonable(request)
         if self.recording:
             return self._record(kind, name, fn, request)
-        return self._replay(kind, name, request, box)
+        if self.mode == "branch":
+            if self._cursor < self.at:
+                event = self._next_event(kind, name, request)
+                self._writer.write(event)
+                return self._result(event, box)
+            if self._cursor == self.at and (self._override is not _UNSET or self._override_error is not None):
+                return self._edited(kind, name, request, box)
+            return self._record(kind, name, fn, request)
+        return self._result(self._next_event(kind, name, request), box)
+
+    def _edited(self, kind: str, name: str, request: Dict[str, Any], box: bool) -> Any:
+        """The branch point: check we got here the same way, then answer with the edited result."""
+        original = self._next_event(kind, name, request)
+        event = dict(original, edited=True, original={"response": original["response"], "error": original["error"]})
+        if self._override_error is not None:
+            exc = self._override_error
+            event.update(response=None, error={"type": type(exc).__name__, "message": str(exc)})
+            self._writer.write(event)
+            raise exc
+        event.update(response=to_jsonable(self._override), error=None)
+        self._writer.write(event)
+        return self._result(event, box)
 
     def _record(self, kind: str, name: str, fn: Callable[[], Any], request: Dict[str, Any]) -> Any:
         started = time.time()
@@ -104,7 +158,8 @@ class Recorder:
         self._writer.write(event)
         return result
 
-    def _replay(self, kind: str, name: str, request: Dict[str, Any], box: bool) -> Any:
+    def _next_event(self, kind: str, name: str, request: Dict[str, Any]) -> Dict[str, Any]:
+        """The recorded event this call must correspond to; advances the cursor."""
         if self._cursor >= len(self._events):
             raise ReplayDivergence(f"step {self._cursor}: {kind} '{name}' called but the recording has ended")
         event = self._events[self._cursor]
@@ -116,6 +171,10 @@ class Recorder:
         if event["request_hash"] != digest(request):
             raise ReplayDivergence(f"step {step}: {kind} '{name}' was called with different arguments")
         self._cursor += 1
+        return event
+
+    @staticmethod
+    def _result(event: Dict[str, Any], box: bool) -> Any:
         if event["error"]:
             raise ReplayedError(event["error"]["type"], event["error"]["message"])
         response = event["response"]

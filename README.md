@@ -25,6 +25,23 @@ with flightrec.Recorder("runs/bad.jsonl", mode="replay") as rec:
 
 Commit a recording of a failure and replay it in CI as a regression test: it costs nothing and cannot flake.
 
+### Branch: what if step N had gone differently?
+
+Pick a step in a recording, change what it returned, and continue from there with a real agent. Steps before it replay from the file, the edited step answers with your value, and every later step runs live, so the agent reacts to the change for real.
+
+```python
+with flightrec.Recorder(
+    "runs/bad.jsonl", mode="branch", at=31,
+    response={"results": [{"title": "the right page"}]},   # or error=TimeoutError("search down")
+    out="runs/bad.branch.jsonl",
+) as rec:
+    run_agent(rec.wrap(anthropic.Anthropic()), task)       # real client, real tools
+```
+
+Leave out `response`/`error` to re-run step 31 live and continue from there. The new run is saved to `out` as a complete recording: replay it, view it (the branch point is marked, with the original result kept), or `flightrec diff` it against the source to see what changed.
+
+In the viewer, select a step and use **Branch from here**: edit the result, or choose "raise an error", and it writes the snippet for you.
+
 ### Divergence is an error, not a guess
 
 During replay, if your code changes so that it makes a different call, or the same call with different arguments, or finishes early, flightrec raises `ReplayDivergence` and names the step. That is what makes a replayed run trustworthy.
@@ -73,7 +90,7 @@ JSON Lines. A header line, then one object per call: `seq`, `kind` (`llm`, `tool
 ## Roadmap
 
 - [x] Time-travel viewer in the browser: scrub steps, inspect the context at each one
-- [ ] Branching: edit a result at step N and re-run from there
+- [x] Branching: edit a result at step N and re-run from there
 - [ ] Streaming and async support
 - [ ] `flightrec replay module:function` from the CLI
 

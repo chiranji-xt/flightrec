@@ -75,6 +75,14 @@
   pre.raw { background: var(--code); border-radius: 6px; padding: 10px 12px; max-height: 340px; overflow: auto; }
   details { margin-top: 8px; } summary { cursor: pointer; color: var(--muted); font-size: 13px; }
   .hint { color: var(--muted); font-size: 12px; margin-top: 12px; }
+  .branch { margin-top: 18px; padding-top: 4px; border-top: 1px solid var(--line); }
+  .branch select, .branch input, .branch textarea { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; max-width: 100%; }
+  .branch textarea { display: block; width: 100%; margin-top: 8px; font: 12.5px/1.45 ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  .branch .fields { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .branch .problem { color: var(--err); font-size: 12px; margin-top: 6px; }
+  .branch pre.raw { margin: 10px 0 8px; }
+  [hidden] { display: none !important; }
+  .chip.edit { color: var(--nondet); border-color: var(--nondet); }
   kbd { font: 11px ui-monospace, Consolas, monospace; background: var(--code); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
 </style>
 </head>
@@ -235,7 +243,10 @@ function renderDetail(e, i) {
       el("span", { class: "chip " + e.kind }, e.kind),
       el("span", { class: "chip" }, ms(e.duration)),
       el("span", { class: "chip" }, "t+" + (e.started - t0).toFixed(3) + " s"),
-      e.error ? el("span", { class: "chip err" }, "error") : null));
+      e.error ? el("span", { class: "chip err" }, "error") : null,
+      e.edited ? el("span", { class: "chip edit" }, "edited (branch point)") : null));
+  if (e.edited && e.original) d.append(el("details", null, el("summary", null, "Original result before the edit"),
+    el("pre", { class: "raw" }, json(e.original.error || e.original.response, true))));
   if (e.error) d.append(el("div", { class: "errbox" }, e.error.type + ": " + e.error.message));
 
   const req = e.request || {};
@@ -255,7 +266,60 @@ function renderDetail(e, i) {
   } else if (!e.error) {
     d.append(el("h3", null, "Recorded value"), el("pre", { class: "raw" }, json(e.response, true)));
   }
+  d.append(branchPanel(e, i));
   d.append(el("details", null, el("summary", null, "Raw event"), el("pre", { class: "raw" }, json(e, true))));
+}
+
+function branchPanel(e, i) {
+  const mode = el("select", { "aria-label": "Branch mode" },
+    el("option", { value: "edit" }, "Return a different result"),
+    el("option", { value: "error" }, "Raise an error"),
+    el("option", { value: "live" }, "Run this step live, unchanged"));
+  const editor = el("textarea", { rows: "8", spellcheck: "false", "aria-label": "Edited result as JSON" });
+  editor.value = e.error ? "null" : json(e.response, true);
+  const errType = el("input", { value: "RuntimeError", "aria-label": "Exception class" });
+  const errMsg = el("input", { value: "simulated failure", "aria-label": "Exception message" });
+  const errRow = el("div", { class: "fields" }, errType, errMsg);
+  const status = el("div", { class: "problem" });
+  const snippet = el("pre", { class: "raw" });
+  const copy = el("button", null, "Copy snippet");
+  const outName = state.name.replace(/\.jsonl?$/, "") + ".branch.jsonl";
+
+  function update() {
+    editor.hidden = mode.value !== "edit";
+    errRow.hidden = mode.value !== "error";
+    let arg = "", problem = "";
+    if (mode.value === "edit") {
+      try { arg = "    response=json.loads(r'''" + json(JSON.parse(editor.value)).replace(/'/g, "\\u0027") + "'''),\n"; }
+      catch (_) { problem = "The edited result is not valid JSON."; }
+    } else if (mode.value === "error") {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(errType.value)) problem = "Exception class must be a Python name, like TimeoutError.";
+      else arg = "    error=" + errType.value + "(" + json(errMsg.value) + "),\n";
+    }
+    status.textContent = problem;
+    copy.disabled = !!problem;
+    snippet.textContent = problem ? "" :
+      "import json\nimport flightrec\n\n" +
+      "# Steps before " + i + " replay from the file; step " + i + " is changed as chosen; later steps run live.\n" +
+      "# Use your real client and real tools. Adjust the paths if you moved the files.\n" +
+      "with flightrec.Recorder(\n    " + json(state.name) + ", mode=\"branch\", at=" + i + ",\n" + arg +
+      "    out=" + json(outName) + ",\n) as rec:\n    run_agent(rec.wrap(client), task)  # your agent\n";
+  }
+  copy.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(snippet.textContent); copy.textContent = "Copied"; }
+    catch (_) {
+      const r = document.createRange(); r.selectNodeContents(snippet);
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      copy.textContent = "Selected: press Ctrl+C";
+    }
+    setTimeout(() => { copy.textContent = "Copy snippet"; }, 2000);
+  });
+  [mode, editor, errType, errMsg].forEach((n) => n.addEventListener("input", update));
+  update();
+  return el("section", { class: "branch" },
+    el("h3", null, "Branch from here"),
+    el("p", { class: "hint", style: "margin:0 0 8px" }, "What if step " + i + " had gone differently? Edit it, then run the snippet to continue from here with a real agent."),
+    mode, editor, errRow, status, snippet, copy);
 }
 
 document.addEventListener("keydown", (ev) => {
