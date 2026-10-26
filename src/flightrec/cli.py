@@ -3,9 +3,12 @@
 import argparse
 import json
 import sys
+import webbrowser
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .store import read_events
+from .viewer import write_viewer
 
 
 def _short(value: Any, limit: int = 70) -> str:
@@ -69,9 +72,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_diff = sub.add_parser("diff", help="find where two recordings first diverge")
     p_diff.add_argument("a")
     p_diff.add_argument("b")
+    p_view = sub.add_parser("view", help="open a recording in the browser viewer")
+    p_view.add_argument("recording")
+    p_view.add_argument("-o", "--out", help="where to write the HTML (default: next to the recording)")
+    p_view.add_argument("--no-open", action="store_true", help="write the file but do not open a browser")
     args = parser.parse_args(argv)
     if args.command == "show":
         show(args.recording)
+        return 0
+    if args.command == "view":
+        recording = Path(args.recording)
+        target = write_viewer(recording, Path(args.out) if args.out else recording.with_suffix(".html"))
+        print(f"wrote {target}")
+        if not args.no_open:
+            webbrowser.open(target.resolve().as_uri())
         return 0
     return diff(args.a, args.b)
 

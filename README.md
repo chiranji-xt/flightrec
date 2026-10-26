@@ -48,6 +48,16 @@ first divergence at step 1: same request, different result
   B: "flightrec re"
 ```
 
+### Browser viewer
+
+```
+flightrec view runs/demo.jsonl
+```
+
+Writes a single self-contained `demo.html` next to the recording and opens it. Scrub the timeline (drag, or `←` `→` `Home` `End`), watch the context grow call by call, and see which messages are new at each model call. Errors show in red. The page has no server and uploads nothing; you can also open any viewer page and drop a different `.jsonl` onto it.
+
+`python examples/make_rich_recording.py` writes a longer sample (several turns, a tool error) to try it on.
+
 Try it without an API key: `python examples/demo_agent.py record`, then `replay`, then `record-bad`.
 
 ## Recording format
@@ -62,7 +72,7 @@ JSON Lines. A header line, then one object per call: `seq`, `kind` (`llm`, `tool
 
 ## Roadmap
 
-- [ ] Time-travel viewer in the browser: scrub steps, inspect the context at each one
+- [x] Time-travel viewer in the browser: scrub steps, inspect the context at each one
 - [ ] Branching: edit a result at step N and re-run from there
 - [ ] Streaming and async support
 - [ ] `flightrec replay module:function` from the CLI
