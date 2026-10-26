@@ -23,7 +23,19 @@ python examples/demo_agent.py branch           # fix step 1 and continue: the an
 flightrec diff runs/demo-bad.jsonl runs/demo-fixed.jsonl
 ```
 
-Install from a clone for now (`pip install .`); it is not on PyPI yet.
+## Install
+
+The PyPI package is named **agent-flightrec** (the name `flightrec` belongs to an unrelated project). The import name and the command are still `flightrec`:
+
+```
+pip install agent-flightrec
+```
+
+```python
+import flightrec
+```
+
+Until the first release is published, install from a clone with `pip install .`.
 
 ## Use
 
