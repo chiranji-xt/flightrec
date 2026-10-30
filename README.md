@@ -1,5 +1,7 @@
 # flightrec
 
+[![CI](https://github.com/chiranji-xt/flightrec/actions/workflows/ci.yml/badge.svg)](https://github.com/chiranji-xt/flightrec/actions/workflows/ci.yml)
+
 A flight recorder for AI agents. Record every model call, tool call, clock read and dice roll of a run, then **replay it offline** with no API calls, or **diff two runs** to see exactly where they split.
 
 Agent bugs are hard to chase because the run that failed will not happen again: the model answers differently, the search returns new results. flightrec turns one bad run into a file you can replay as many times as you like.
