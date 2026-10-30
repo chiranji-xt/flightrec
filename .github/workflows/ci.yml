@@ -15,12 +15,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # Pinned: "ubuntu-latest" moved to 26.04, which has no Python 3.9 build.
+        os: [ubuntu-24.04, windows-latest]
         # 3.9 has no Anthropic SDK (it needs 3.10+), so there the SDK tests skip.
         python: ["3.9", "3.12", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e ".[dev]"
@@ -30,8 +31,8 @@ jobs:
     name: core without the Anthropic SDK
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
       - run: python -m pip install -e . pytest
@@ -41,8 +42,8 @@ jobs:
     name: build and install the wheel
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: python -m pip install build twine
