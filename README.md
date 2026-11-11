@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/readme-banner.svg" alt="flightrec" width="100%"/>
+</p>
+
 # flightrec
 
 [![CI](https://github.com/chiranji-xt/flightrec/actions/workflows/ci.yml/badge.svg)](https://github.com/chiranji-xt/flightrec/actions/workflows/ci.yml)
